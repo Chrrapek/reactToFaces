@@ -6,13 +6,8 @@ import ImageLinkForm from "./components/ImageLinkForm/ImageLinkForm";
 import Rank from './components/Rank/Rank';
 import FaceRecognition from './components/FaceRecognition/FaceRecognition';
 import Signin from './components/Signin/Signin'
-import Clarifai from 'clarifai'
 import Particles from "react-particles-js";
 import Register from "./components/Register/Register";
-
-const app = new Clarifai.App({
-    apiKey: 'ffcb55ca585f499d9d1d3cd03a14dc52'
-});
 
 const params = {
     particles: {
@@ -26,16 +21,26 @@ const params = {
     }
 };
 
+const initialState = {
+    input: '',
+    imageUrl: '',
+    box: {},
+    route: 'signin',
+    isSignedIn: false,
+    user: {
+        id: '',
+        name: '',
+        pasword: '',
+        email: '',
+        entries: 0,
+        joined: ''
+    }
+};
+
 class App extends Component {
     constructor() {
         super();
-        this.state = {
-            input: '',
-            imageUrl: '',
-            box: {},
-            route: 'signin',
-            isSignedIn: false
-        }
+        this.state = initialState
     }
 
     onInputChange = (event) => {
@@ -62,14 +67,48 @@ class App extends Component {
 
     onSubmit = () => {
         this.setState({imageUrl: this.state.input});
-        app.models.predict(Clarifai.FACE_DETECT_MODEL, this.state.input)
-            .then(response => this.displayFaceBox(this.calculateFaceLocation(response)))
+        fetch("https://hidden-oasis-69992.herokuapp.com/imageurl", {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({input: this.state.input})
+        })
+            .then(response => response.json())
+            .then(response => {
+                if (response) {
+                    fetch("https://hidden-oasis-69992.herokuapp.com/image", {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({id: this.state.user.id})
+                    })
+                        .then(res => res.json())
+                        .then(count => {
+                            this.setState(Object.assign(this.state.user, {entries: count}))
+                        })
+                }
+                this.displayFaceBox(this.calculateFaceLocation(response))
+            })
             .catch(err => console.log(err))
+    };
+
+    loadUser = (data) => {
+        this.setState({
+            user: {
+                id: data.id,
+                name: data.name,
+                email: data.email,
+                entries: data.entries,
+                joined: data.joined
+            }
+        })
     };
 
     onRouteChange = (route) => {
         if (route === 'signout') {
-            this.setState({isSignedIn: false})
+            this.setState(initialState)
         } else if (route === 'home') {
             this.setState({isSignedIn: true})
         }
@@ -86,14 +125,14 @@ class App extends Component {
                 {this.state.route === 'home' ?
                     <div>
                         <Logo/>
-                        <Rank/>
+                        <Rank rank={this.state.user.entries}/>
                         <ImageLinkForm onInputChange={this.onInputChange} onButtonSubmit={this.onSubmit}/>
                         <FaceRecognition imageUrl={this.state.imageUrl} box={this.state.box}/>
                     </div>
                     : (
                         this.state.route === 'signin' || this.state.route === 'signout'
-                            ? <Signin onRouteChange={this.onRouteChange}/>
-                            : <Register onRouteChange={this.onRouteChange}/>
+                            ? <Signin loadUser={this.loadUser} onRouteChange={this.onRouteChange}/>
+                            : <Register onRouteChange={this.onRouteChange} loadUser={this.loadUser}/>
                     )}
             </div>
         );
